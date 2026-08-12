@@ -278,31 +278,28 @@ export default function Chat() {
     setInput("");
     setIsLoading(true);
 
-    // Create or use existing conversation
-    let conversationId = currentConversationId;
-    if (!conversationId) {
-      const title = text.substring(0, 50); // Use first 50 chars as title
-      const crimeType = detected || detectedCrime;
-      conversationId = await createNewConversation(title, crimeType || null);
-      if (conversationId) {
-        setCurrentConversationId(conversationId);
-      } else {
-        console.error("Failed to create conversation");
-        setIsLoading(false);
-        return;
-      }
-    }
+    // Kick off conversation creation + user-message persistence in the BACKGROUND.
+    // Previously these were awaited before /gentxt, so a slow or hung
+    // /conversations call would block the LLM stream from ever starting — the
+    // UI would sit on the loading spinner and no /gentxt request would fire.
+    // Persistence is not required to render the reply; if it fails, we just
+    // lose history for that turn (already logged inside saveMessage).
+    const crimeTypeForConv = detected || detectedCrime;
+    const conversationIdPromise: Promise<string | null> = currentConversationId
+      ? Promise.resolve(currentConversationId)
+      : createNewConversation(text.substring(0, 50), crimeTypeForConv || null).then(
+          (id) => {
+            if (id) setCurrentConversationId(id);
+            return id;
+          }
+        );
 
-    // Save user message to backend
-    if (conversationId) {
-      await saveMessage(
-        conversationId,
-        "user",
-        text.trim(),
-        inputLanguage,
-        detected || detectedCrime
-      );
-    }
+    // Fire-and-forget: save the user's message once we have a conversation id.
+    conversationIdPromise.then((id) => {
+      if (id) {
+        void saveMessage(id, "user", text.trim(), inputLanguage, crimeTypeForConv);
+      }
+    });
 
     const isChildSafety = detectedCrime === "child_safety" || detected === "child_safety";
     const systemPrompt = isChildSafety ? CHILD_SAFETY_PROMPT : SYSTEM_PROMPT;
@@ -362,16 +359,18 @@ export default function Chat() {
             )
           );
 
-          // Save AI response to backend
-          if (conversationId) {
-            await saveMessage(
-              conversationId,
-              "assistant",
-              formattedContent,
-              inputLanguage,
-              extracted
-            );
-          }
+          // Save AI response to backend (fire-and-forget; don't block the UI on it).
+          conversationIdPromise.then((id) => {
+            if (id) {
+              void saveMessage(
+                id,
+                "assistant",
+                formattedContent,
+                inputLanguage,
+                extracted
+              );
+            }
+          });
         },
         onError: (error) => {
           setIsLoading(false);

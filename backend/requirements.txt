@@ -26,7 +26,7 @@ greenlet
 # auth module dependencies
 python-jose[cryptography]>=3.3.0
 passlib>=1.7.4
-bcrypt<5.0.0  # passlib 1.7.4 is incompatible with bcrypt 5.x
+bcrypt<4.1  # passlib 1.7.4 can't read the version of bcrypt >=4.1 (triggers the "builtin backend" warning and can cause verify to fail)
 
 # aihub module dependencies
 openai==2.16.0
