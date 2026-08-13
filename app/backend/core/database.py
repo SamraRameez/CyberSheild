@@ -9,6 +9,7 @@ from asyncpg.exceptions import (
     DuplicateTableError,
     UniqueViolationError,
 )
+from fastapi import HTTPException
 from core.config import settings
 from sqlalchemy import DDL, text
 from sqlalchemy.engine import make_url
@@ -554,6 +555,9 @@ async def get_db() -> AsyncSession:
             logger.debug(f"[DB_OP] Database session created successfully in {time.time() - start_time:.4f}s")
             try:
                 yield session
+            except HTTPException:
+                # Normal API-level error (e.g. 401 wrong password) — not a DB failure. Propagate quietly.
+                raise
             except Exception as e:
                 logger.error(f"Database session error: {e}", exc_info=True)
                 # Don't manually rollback here - AsyncSession.__aexit__ will automatically rollback on exception
@@ -562,6 +566,8 @@ async def get_db() -> AsyncSession:
             finally:
                 logger.debug(f"[DB_OP] Database session cleanup after {time.time() - start_time:.4f}s")
                 # Session is automatically closed by the async context manager when exiting 'async with'
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create database session: {e}", exc_info=True)
         raise
