@@ -18,8 +18,13 @@ from schemas.auth import UserCreateRequest, UserLoginRequest
 
 logger = logging.getLogger(__name__)
 
-# Password hashing - using argon2 instead of bcrypt due to compatibility issues
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Password hashing.
+# argon2 is the primary (new) scheme. bcrypt is kept as a *verifier* only, so
+# legacy accounts whose password_hash was written by an older bcrypt-based
+# version of this service can still log in. Any bcrypt hash is flagged as
+# `deprecated` and will be silently re-hashed to argon2 on next successful
+# login (see `verify_password` below).
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 # JWT configuration
 ALGORITHM = "HS256"
@@ -148,6 +153,13 @@ class AuthService:
             # Verify password
             if not AuthService.verify_password(request.password, user.password_hash):
                 raise ValueError("Invalid email or password")
+
+            # Transparent hash upgrade: if the stored hash uses a deprecated
+            # scheme (e.g. legacy bcrypt), silently re-hash with the current
+            # primary scheme (argon2) now that we've confirmed the password.
+            if pwd_context.needs_update(user.password_hash):
+                user.password_hash = AuthService.hash_password(request.password)
+                logger.info(f"Upgraded password hash to current scheme for {user.email}")
 
             # Check if user is active
             if not user.is_active:

@@ -28,6 +28,7 @@ greenlet
 python-jose[cryptography]>=3.3.0
 PyJWT>=2.8.0
 passlib[argon2]>=1.7.4
+bcrypt<4.1  # legacy verifier only, so old bcrypt hashes still log in (passlib 1.7.4 can't read bcrypt>=4.1's version)
 
 # aihub module dependencies
 openai==2.16.0
