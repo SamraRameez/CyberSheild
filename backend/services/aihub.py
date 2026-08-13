@@ -41,12 +41,7 @@ logger = logging.getLogger(__name__)
 # between requests, which is the single biggest lever for consistent
 # response times on a host with variable network conditions (e.g. Render
 # free tier).
-#
-# Timeouts are split by phase instead of one flat value applied to
-# connect+read+write+pool alike: connect/write/pool fail fast (a hung TCP
-# handshake shouldn't cost the user 60-120s before anything happens), while
-# read stays generous enough for the provider to actually generate.
-# ---------------------------------------------------------------------------
+
 _AI_TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
 _AI_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=30.0)
 
