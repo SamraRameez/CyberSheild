@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { streamGenTxt } from "@/lib/aihub";
+import { recordChildSafetyPrompt, streamGenTxt } from "@/lib/aihub";
 import {
   Shield,
   Baby,
@@ -82,6 +82,8 @@ export default function ChildSafety() {
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
+
+    void recordChildSafetyPrompt(text.trim());
 
     // Detect language of user input
     const inputLanguage = detectLanguage(text);
@@ -535,7 +537,7 @@ export default function ChildSafety() {
                   <ol className="space-y-2 text-sm text-muted-foreground">
                     <li className="flex items-start gap-2">
                       <span className="font-bold text-amber-400">1.</span>
-                      Don't panic — you're going to be okay
+                      Don't panic  you're going to be okay
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="font-bold text-amber-400">2.</span>
@@ -543,7 +545,7 @@ export default function ChildSafety() {
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="font-bold text-amber-400">3.</span>
-                      Don't delete any messages — they might be important evidence
+                      Don't delete any messages they might be important evidence
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="font-bold text-amber-400">4.</span>
@@ -605,6 +607,7 @@ export default function ChildSafety() {
                     input={input}
                     setInput={setInput}
                     isLoading={isLoading}
+                    isSlowConnection={isSlowConnection}
                     handleSubmit={handleSubmit}
                     sendMessage={sendMessage}
                     quickTopics={quickTopics}
@@ -721,8 +724,7 @@ function InlineChat({
                 </div>
                 {isSlowConnection && (
                   <p className="text-xs text-muted-foreground mt-2">
-                     Please wait a moment  since this is your first visit, we’re getting the platform ready for you.
-
+                    This response will take a moment for the first request, so please wait for a moment.
                   </p>
                 )}
               </div>
