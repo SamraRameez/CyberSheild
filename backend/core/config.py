@@ -76,8 +76,21 @@ class Settings(BaseSettings):
             logger.debug(f"Read dynamic attribute {name} from environment variable {env_var_name}")
             return value
 
-        if name in {"app_ai_base_url", "app_ai_key"}:
-            return None
+        if name in {
+            "app_ai_base_url",
+            "app_ai_key",
+            "app_ai_text_model",
+            "database_url",
+            "admin_user_id",
+            "admin_user_email",
+            "jwt_secret_key",
+            "jwt_algorithm",
+            "jwt_expire_minutes",
+            "secret_key",
+            "cors_origins",
+            "log_level",
+        }:
+            return os.environ.get(env_var_name, None)
 
         # If not found, raise AttributeError to maintain normal Python behavior
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")

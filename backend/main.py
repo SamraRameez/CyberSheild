@@ -22,45 +22,43 @@ from services.aihub import close_http_client as close_aihub_http_client
 
 def setup_logging():
     """Configure the logging system."""
-    if os.environ.get("IS_LAMBDA") == "true":
-        return
+    # Detect serverless environments (Vercel, AWS Lambda, etc.)
+    is_serverless = bool(
+        os.environ.get("VERCEL") == "1"
+        or os.environ.get("IS_LAMBDA") == "true"
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    )
 
-    # Create the logs directory
-    log_dir = "logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    # Generate log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f"{log_dir}/app_{timestamp}.log"
-
-    # Configure log format
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handlers = [logging.StreamHandler()]
+
+    # In serverless environments, file system is read-only; stream to console only
+    if not is_serverless:
+        try:
+            log_dir = "logs"
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = f"{log_dir}/app_{timestamp}.log"
+            handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+        except OSError:
+            pass  # Fall back to console handler if filesystem is read-only
 
     # Configure the root logger
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
         format=log_format,
-        handlers=[
-            # File handler
-            logging.FileHandler(log_file, encoding="utf-8"),
-            # Console handler
-            logging.StreamHandler(),
-        ],
+        handlers=handlers,
     )
 
     # Set log levels for specific modules
-    logging.getLogger("uvicorn").setLevel(logging.DEBUG)
-    logging.getLogger("fastapi").setLevel(logging.DEBUG)
-
+    logging.getLogger("uvicorn").setLevel(logging.INFO)
+    logging.getLogger("fastapi").setLevel(logging.INFO)
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
-    # Log configuration details
     logger = logging.getLogger(__name__)
     logger.info("=== Logging system initialized ===")
-    logger.info(f"Log file: {log_file}")
-    logger.info("Log level: INFO")
-    logger.info(f"Timestamp: {timestamp}")
 
 
 @asynccontextmanager
@@ -68,17 +66,43 @@ async def lifespan(app: FastAPI):
     logger = logging.getLogger(__name__)
     logger.info("=== Application startup initiated ===")
 
+    is_serverless = bool(
+        os.environ.get("VERCEL") == "1"
+        or os.environ.get("IS_LAMBDA") == "true"
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    )
+
     # MODULE_STARTUP_START
-    await initialize_database()
-    await initialize_mock_data()
-    await initialize_admin_user()
+    try:
+        await initialize_database()
+    except Exception as e:
+        logger.error(f"Database initialization failed during startup: {e}")
+        # In serverless, do not crash the container so health check and other endpoints can still work
+        if not is_serverless:
+            raise
+
+    try:
+        await initialize_mock_data()
+    except Exception as e:
+        logger.warning(f"Mock data initialization skipped/failed: {e}")
+
+    try:
+        await initialize_admin_user()
+    except Exception as e:
+        logger.warning(f"Admin user initialization skipped/failed: {e}")
     # MODULE_STARTUP_END
 
     logger.info("=== Application startup completed successfully ===")
     yield
     # MODULE_SHUTDOWN_START
-    await close_database()
-    await close_aihub_http_client()
+    try:
+        await close_database()
+    except Exception as e:
+        logger.warning(f"Database close error: {e}")
+    try:
+        await close_aihub_http_client()
+    except Exception as e:
+        logger.warning(f"AIHub client close error: {e}")
     # MODULE_SHUTDOWN_END
 
 
